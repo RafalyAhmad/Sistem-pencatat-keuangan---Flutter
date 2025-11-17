@@ -1,67 +1,63 @@
-// ignore_for_file: body_might_complete_normally_nullable, unnecessary_null_comparison, must_be_immutable, sort_child_properties_last
-
 import 'package:flutter/material.dart';
 import 'package:money_tracker_1/model/money_model.dart';
-import 'package:money_tracker_1/presentation/transaction_detail_screen.dart.dart';
+import 'screen_statistics.dart';
 
-class ScreenHome extends StatelessWidget {
-  ScreenHome({super.key});
+class ScreenHome extends StatefulWidget {
+  const ScreenHome({super.key});
 
-  // 1. ValueNotifier untuk Daftar Transaksi
+  @override
+  State<ScreenHome> createState() => _ScreenHomeState();
+}
+
+class _ScreenHomeState extends State<ScreenHome> {
   final ValueNotifier<List<MoneyModel>> myMoney = ValueNotifier([]);
-
-  // 2. ValueNotifier BARU untuk Saldo Total
+  final ValueNotifier<double> totalIncome = ValueNotifier(0.0);
+  final ValueNotifier<double> totalExpense = ValueNotifier(0.0);
   final ValueNotifier<double> totalBalance = ValueNotifier(0.0);
 
   final _formKey = GlobalKey<FormState>();
-
   final transactioncontroller = TextEditingController();
   final amountcontroller = TextEditingController();
   String? selectedType;
+  String? selectedCategory;
 
-  // FUNGSI BARU: Menghitung ulang saldo total
-  void calculateBalance() {
-    double total = 0.0;
-    for (var transaction in myMoney.value) {
-      final amount = double.tryParse(transaction.transactionAmount) ?? 0.0;
-      if (transaction.transactionType == 'Income') {
-        total += amount;
-      } else if (transaction.transactionType == 'Expense') {
-        total -= amount;
+  final List<String> categories = ["Makanan", "Transport", "Tagihan"];
+
+  @override
+  void initState() {
+    super.initState();
+    myMoney.addListener(calculateValues);
+  }
+
+  void calculateValues() {
+    double income = 0.0;
+    double expense = 0.0;
+
+    for (var t in myMoney.value) {
+      final amt = double.tryParse(t.transactionAmount) ?? 0.0;
+
+      if (t.transactionType == "Income") {
+        income += amt;
+      } else {
+        expense += amt;
       }
     }
-    // Perbarui ValueNotifier Saldo
-    totalBalance.value = total;
-  }
 
-  // FUNGSI BARU: Listener untuk memperbarui saldo setiap kali 'myMoney' berubah
-  void setupBalanceListener() {
-    myMoney.addListener(calculateBalance);
-    // Jalankan pertama kali untuk saldo awal (jika ada data dummy)
-    calculateBalance();
+    totalIncome.value = income;
+    totalExpense.value = expense;
+    totalBalance.value = income - expense;
   }
-
-  // Override metode initState atau konstruktor (karena ini StatelessWidget, kita panggil di constructor)
-  // Catatan: Sebaiknya gunakan StatefulWidget dan panggil setupBalanceListener di initState
-  // Namun, kita akan pertahankan StatelessWidget untuk saat ini.
 
   @override
   Widget build(BuildContext context) {
-    // Panggil listener di build method (hati-hati, ini bisa dipanggil berkali-kali)
-    // Di aplikasi nyata, pindahkan logika listener ke StatefulWidget's initState.
-    // Untuk tujuan demo, ini akan bekerja karena myMoney belum memiliki listener
-    if (myMoney.hasListeners == false) {
-      setupBalanceListener();
-    }
-
     return Scaffold(
       appBar: AppBar(
         backgroundColor: Colors.blue,
-        toolbarHeight: 120, // Diperlebar untuk menampung saldo
+        toolbarHeight: 120,
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
+            const Text(
               "Money Tracker",
               style: TextStyle(
                 color: Colors.white,
@@ -69,274 +65,94 @@ class ScreenHome extends StatelessWidget {
                 fontWeight: FontWeight.bold,
               ),
             ),
-            SizedBox(height: 8),
-            // MENGGUNAKAN ValueListenableBuilder untuk Saldo
+            const SizedBox(height: 6),
             ValueListenableBuilder<double>(
               valueListenable: totalBalance,
-              builder: (context, balance, child) {
-                return Text(
-                  "Saldo Total: Rp.${balance.toStringAsFixed(2)}", // Tampilkan 2 angka desimal
-                  style: TextStyle(color: Colors.white, fontSize: 18),
-                );
-              },
+              builder: (_, v, __) => Text(
+                "Saldo: Rp.${v.toStringAsFixed(2)}",
+                style: const TextStyle(color: Colors.white, fontSize: 18),
+              ),
+            ),
+            ValueListenableBuilder<double>(
+              valueListenable: totalIncome,
+              builder: (_, v, __) => Text(
+                "Income: Rp.${v.toStringAsFixed(2)}",
+                style: const TextStyle(color: Colors.white, fontSize: 16),
+              ),
+            ),
+            ValueListenableBuilder<double>(
+              valueListenable: totalExpense,
+              builder: (_, v, __) => Text(
+                "Expense: Rp.${v.toStringAsFixed(2)}",
+                style: const TextStyle(color: Colors.white, fontSize: 16),
+              ),
             ),
           ],
         ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.pie_chart, color: Colors.white),
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => StatisticsScreen(myMoney: myMoney),
+              ),
+            ),
+          ),
+        ],
       ),
+
       body: ValueListenableBuilder(
         valueListenable: myMoney,
-        builder: (context, List<MoneyModel> value, _) {
+        builder: (_, List<MoneyModel> value, __) {
           if (value.isEmpty) {
-            return Center(child: Text("Belum ada transaksi. Tambahkan satu!"));
+            return const Center(child: Text("Belum ada transaksi."));
           }
+
           return ListView.separated(
-            itemBuilder: (context, index) {
-              // ... (Kode ListView.separated tetap sama)
+            itemCount: value.length,
+            separatorBuilder: (_, __) => const Divider(),
+            itemBuilder: (_, index) {
+              final t = value[index];
+
               return ListTile(
-                leading: Container(
-                  padding: EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.blue,
-                    shape: BoxShape.circle,
-                  ),
+                leading: CircleAvatar(
+                  backgroundColor: Colors.blue,
                   child: Text(
-                    (index + 1).toString(),
-                    style: TextStyle(fontSize: 15, color: Colors.white),
+                    "${index + 1}",
+                    style: const TextStyle(color: Colors.white),
                   ),
                 ),
-                title: Row(
-                  children: [
-                    Text(
-                      value[index].transactionNarration,
-                      style: TextStyle(fontSize: 25),
-                    ),
-                    Spacer(),
-                    IconButton(
-                      onPressed: () {
-                        Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (context) => TransactionDetailScreen(
-                              transaction: value[index],
-                            ),
-                          ),
-                        );
-                      },
-                      icon: Icon(Icons.arrow_forward_rounded, size: 18),
-                    ),
-                  ],
+                title: Text(t.transactionNarration),
+                subtitle: Text(
+                  "${t.transactionType} | ${t.transactionCategory} | Rp.${t.transactionAmount}",
                 ),
-                subtitle: Row(
-                  children: [
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          "Transaction Amt: Rp.${value[index].transactionAmount}",
-                        ),
-                        Text(
-                          "Transaction Type: ${value[index].transactionType}",
-                        ),
-                      ],
-                    ),
-                    Spacer(),
-                    IconButton(
-                      onPressed: () {
-                        final item = myMoney.value[index];
-                        transactioncontroller.text = item.transactionNarration;
-                        amountcontroller.text = item.transactionAmount;
-                        selectedType = item.transactionType;
-
-                        showDialog(
-                          context: context,
-                          builder: (context) {
-                            return AlertDialog(
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(16),
-                              ),
-                              title: Center(
-                                child: Text(
-                                  "Edit Transaction",
-                                  style: TextStyle(
-                                    color: Colors.red,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ),
-                              content: Form(
-                                key: _formKey,
-                                child: Column(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    TextFormField(
-                                      controller: transactioncontroller,
-                                      validator: (value) {
-                                        if (value == null || value.isEmpty) {
-                                          return "Enter a Transaction";
-                                        }
-                                        return null;
-                                      },
-                                      decoration: InputDecoration(
-                                        hintText: "Transaction",
-                                        border: OutlineInputBorder(),
-                                      ),
-                                    ),
-                                    SizedBox(height: 16),
-                                    DropdownButtonFormField<String>(
-                                      value: selectedType,
-                                      validator: (value) {
-                                        if (value == null || value.isEmpty) {
-                                          return "Select a Transaction Type";
-                                        }
-                                        return null;
-                                      },
-                                      decoration: InputDecoration(
-                                        hintText: "Transaction Type",
-                                        border: UnderlineInputBorder(),
-                                      ),
-                                      items: ['Income', 'Expense']
-                                          .map(
-                                            (type) => DropdownMenuItem(
-                                              value: type,
-                                              child: Text(type),
-                                            ),
-                                          )
-                                          .toList(),
-                                      onChanged: (value) {
-                                        selectedType = value;
-                                      },
-                                    ),
-                                    Padding(
-                                      padding: EdgeInsets.only(top: 30),
-                                      child: TextFormField(
-                                        controller: amountcontroller,
-                                        keyboardType: TextInputType.number,
-                                        validator: (value) {
-                                          if (value == null || value.isEmpty) {
-                                            return "Enter a Transaction";
-                                          }
-                                          return null;
-                                        },
-                                        decoration: InputDecoration(
-                                          hintText: "Add Amount",
-                                          border: OutlineInputBorder(
-                                            borderRadius: BorderRadius.circular(
-                                              6,
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              actions: [
-                                TextButton(
-                                  onPressed: () => Navigator.of(context).pop(),
-                                  child: Text(
-                                    "Cancel",
-                                    style: TextStyle(color: Colors.purple),
-                                  ),
-                                ),
-                                TextButton(
-                                  onPressed: () {
-                                    if (_formKey.currentState!.validate()) {
-                                      final updated = MoneyModel(
-                                        id: myMoney.value[index].id,
-                                        transactionNarration:
-                                            transactioncontroller.text,
-                                        transactionType: selectedType!,
-                                        transactionAmount:
-                                            amountcontroller.text,
-                                      );
-                                      final updatedList = List<MoneyModel>.from(
-                                        myMoney.value,
-                                      );
-                                      updatedList[index] = updated;
-                                      myMoney.value = updatedList;
-
-                                      // PENTING: Saldo akan diperbarui otomatis oleh Listener
-
-                                      Navigator.of(context).pop();
-                                    }
-                                  },
-                                  child: Text("Update"),
-                                ),
-                              ],
-                            );
-                          },
-                        );
-                      },
-                      icon: Icon(Icons.edit, size: 20),
-                    ),
-                    IconButton(
-                      onPressed: () {
-                        showDialog(
-                          context: context,
-                          builder: (context) => AlertDialog(
-                            title: Text("Are you sure you want to delete"),
-                            actions: [
-                              TextButton(
-                                onPressed: () {
-                                  // Hapus item dari daftar
-                                  myMoney.value = List.from(myMoney.value)
-                                    ..removeAt(index);
-
-                                  // PENTING: Saldo akan diperbarui otomatis oleh Listener
-
-                                  Navigator.of(context).pop();
-                                },
-                                child: Text(
-                                  "Yes",
-                                  style: TextStyle(color: Colors.red),
-                                ),
-                              ),
-                              TextButton(
-                                onPressed: () {
-                                  Navigator.of(context).pop();
-                                },
-                                child: Text(
-                                  "No",
-                                  style: TextStyle(color: Colors.red),
-                                ),
-                              ),
-                            ],
-                          ),
-                        );
-                      },
-                      icon: Icon(Icons.delete),
-                    ),
-                  ],
+                trailing: IconButton(
+                  icon: const Icon(Icons.delete),
+                  onPressed: () {
+                    myMoney.value = List.from(myMoney.value)..removeAt(index);
+                  },
                 ),
               );
             },
-            separatorBuilder: (context, index) {
-              return Divider();
-            },
-            itemCount: value.length,
           );
         },
       ),
+
       floatingActionButton: FloatingActionButton(
+        backgroundColor: Colors.blue,
+        child: const Icon(Icons.add, color: Colors.white),
         onPressed: () {
           transactioncontroller.clear();
           amountcontroller.clear();
           selectedType = null;
+          selectedCategory = null;
+
           showDialog(
             context: context,
-            builder: (context) {
+            builder: (_) {
               return AlertDialog(
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                title: Center(
-                  child: Text(
-                    "Add a Transaction",
-                    style: TextStyle(
-                      color: Colors.red,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
+                title: const Text("Add Transaction"),
                 content: Form(
                   key: _formKey,
                   child: Column(
@@ -344,98 +160,104 @@ class ScreenHome extends StatelessWidget {
                     children: [
                       TextFormField(
                         controller: transactioncontroller,
-                        validator: (value) {
-                          if (value!.isEmpty || value == null) {
-                            return "Enter a Transaction";
-                          }
-                        },
-                        decoration: InputDecoration(
-                          hintText: "Transaction",
+                        validator: (v) =>
+                            v!.isEmpty ? "Enter transaction" : null,
+                        decoration: const InputDecoration(
                           border: OutlineInputBorder(),
+                          hintText: "Transaction Name",
                         ),
                       ),
-                      SizedBox(height: 16),
+                      const SizedBox(height: 12),
+
+                      // TYPE SELECTOR
                       DropdownButtonFormField<String>(
                         value: selectedType,
-                        validator: (value) {
-                          if (value == null || value.isEmpty) {
-                            return "Select a Transaction Type";
-                          }
-                          return null;
-                        },
-                        decoration: InputDecoration(
-                          hintText: "Transaction Type",
-                          border: UnderlineInputBorder(),
-                        ),
-                        items: ['Income', 'Expense']
+                        items: ["Income", "Expense"]
                             .map(
-                              (type) => DropdownMenuItem(
-                                value: type,
-                                child: Text(type),
-                              ),
+                              (e) => DropdownMenuItem(value: e, child: Text(e)),
                             )
                             .toList(),
-                        onChanged: (value) {
-                          selectedType = value;
+                        validator: (v) => v == null ? "Select type" : null,
+                        onChanged: (v) {
+                          setState(() {
+                            selectedType = v;
+                          });
                         },
+                        decoration: const InputDecoration(
+                          border: OutlineInputBorder(),
+                          hintText: "Type",
+                        ),
                       ),
-                      Padding(
-                        padding: EdgeInsets.only(top: 30),
-                        child: TextFormField(
-                          controller: amountcontroller,
-                          keyboardType: TextInputType.number,
-                          validator: (value) {
-                            if (value == null || value.isEmpty) {
-                              return "Enter a Transaction";
-                            }
-                          },
-                          decoration: InputDecoration(
-                            hintText: "Add Amount",
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                          ),
+
+                      const SizedBox(height: 12),
+
+                      // CATEGORY SELECTOR – hanya wajib jika Expense
+                      DropdownButtonFormField<String>(
+                        value: selectedCategory,
+                        items: categories
+                            .map(
+                              (e) => DropdownMenuItem(value: e, child: Text(e)),
+                            )
+                            .toList(),
+                        validator: (v) {
+                          if (selectedType == "Expense") {
+                            return v == null ? "Select category" : null;
+                          }
+                          return null; // Income bebas tanpa kategori
+                        },
+                        onChanged: (v) => selectedCategory = v,
+                        decoration: const InputDecoration(
+                          border: OutlineInputBorder(),
+                          hintText: "Category (Expense only)",
+                        ),
+                      ),
+
+                      const SizedBox(height: 12),
+
+                      TextFormField(
+                        controller: amountcontroller,
+                        keyboardType: TextInputType.number,
+                        validator: (v) => v!.isEmpty ? "Enter amount" : null,
+                        decoration: const InputDecoration(
+                          border: OutlineInputBorder(),
+                          hintText: "Amount",
                         ),
                       ),
                     ],
                   ),
                 ),
+
                 actions: [
                   TextButton(
-                    onPressed: () => Navigator.of(context).pop(),
-                    child: Text(
-                      "Cancel",
-                      style: TextStyle(color: Colors.purple),
-                    ),
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text("Cancel"),
                   ),
                   TextButton(
                     onPressed: () {
                       if (_formKey.currentState!.validate()) {
-                        final nextId = myMoney.value.length + 1;
-
-                        final newTransaction = MoneyModel(
-                          id: nextId.toString(),
+                        final newData = MoneyModel(
+                          id: DateTime.now().millisecondsSinceEpoch.toString(),
                           transactionNarration: transactioncontroller.text,
                           transactionType: selectedType!,
                           transactionAmount: amountcontroller.text,
+
+                          // Auto-category untuk Income
+                          transactionCategory: selectedType == "Income"
+                              ? "Income"
+                              : selectedCategory!,
                         );
-                        // Tambahkan transaksi baru
-                        myMoney.value = [...myMoney.value, newTransaction];
 
-                        // PENTING: Saldo akan diperbarui otomatis oleh Listener
-
-                        Navigator.of(context).pop();
+                        myMoney.value = [...myMoney.value, newData];
+                        Navigator.pop(context);
                       }
                     },
-                    child: Text("Add"),
+                    child: const Text("Add"),
                   ),
                 ],
               );
             },
           );
         },
-        child: Icon(Icons.add, color: Colors.white),
-        backgroundColor: Colors.blue,
       ),
     );
   }
